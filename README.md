@@ -1,1 +1,3 @@
-# rvl_urfu_task
+fast test todo
+./test.sh
+./test_curl.sh    
