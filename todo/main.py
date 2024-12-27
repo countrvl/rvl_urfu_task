@@ -14,7 +14,7 @@ load_dotenv()
 DB_URL = os.getenv("TODO_DB_URL", "sqlite://./DB/todo.db")
 
 async def lifespan(app: FastAPI):
-    await Tortoise.init(db_url=DB_URL, modules={"models": ["__main__"]})
+    await Tortoise.init(db_url=DB_URL, modules={"models": ["main"]})
     await Tortoise.generate_schemas()
     yield
     await Tortoise.close_connections()
