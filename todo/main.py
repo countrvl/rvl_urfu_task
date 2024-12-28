@@ -1,82 +1,72 @@
+
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel
+from typing import List, Optional
 from tortoise.models import Model
 from tortoise import Tortoise, fields
 from tortoise.contrib.pydantic import pydantic_model_creator
 from dotenv import load_dotenv
 import os
-import random
-import string
 
-# Ensure the DB folder exists
 os.makedirs("DB", exist_ok=True)
 
-# Load environment variables
-load_dotenv()
-DB_URL = os.getenv("SHORT_DB_URL", "sqlite://./DB/shorturl.db")
-print(f"Database URL: {DB_URL}")  # Debug log
+load_dotenv()  
+DB_URL = os.getenv("TODO_DB_URL", "sqlite://./DB/todo.db")
 
-# Initialize FastAPI
-app_short = FastAPI()
-
-# Tortoise ORM lifespan
 async def lifespan(app: FastAPI):
-    try:
-        print(f"Initializing database with URL: {DB_URL}")
-        await Tortoise.init(db_url=DB_URL, modules={"models": ["main"]})
-        await Tortoise.generate_schemas()
-        print(f"Connected to database: {DB_URL}")
-        yield
-    except Exception as e:
-        print(f"Error during lifespan startup: {e}")
-        raise
-    finally:
-        await Tortoise.close_connections()
+    await Tortoise.init(db_url=DB_URL, modules={"models": ["main"]})
+    await Tortoise.generate_schemas()
+    yield
+    await Tortoise.close_connections()
 
-app_short = FastAPI(lifespan=lifespan)
+app_todo = FastAPI(lifespan=lifespan)
 
-# Database model
-class ShortURL(Model):
+class TodoItem(Model):
     id = fields.IntField(pk=True)
-    short_id = fields.CharField(max_length=8, unique=True)
-    original_url = fields.TextField()
-
-    class Meta:
-        table = "short_urls"
+    title = fields.CharField(max_length=255)
+    description = fields.TextField(null=True)
+    completed = fields.BooleanField(default=False)
 
 # Pydantic models
-ShortURL_Pydantic = pydantic_model_creator(ShortURL, name="ShortURL")
-ShortURLIn_Pydantic = pydantic_model_creator(ShortURL, name="ShortURLIn", exclude_readonly=True)
+TodoItem_Pydantic = pydantic_model_creator(TodoItem, name="TodoItem")
+TodoItemIn_Pydantic = pydantic_model_creator(TodoItem, name="TodoItemIn", exclude_readonly=True)
 
-# Helper to generate short IDs
-def generate_short_id(length=8):
-    return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
+@app_todo.get("/teapot", status_code=418) # :)
+async def teapot():
+    return {"detail": "I'm a teapot"}
 
-# API to shorten URLs
-class URLRequest(BaseModel):
-    url: HttpUrl
+@app_todo.post("/items", response_model=TodoItem_Pydantic)
+async def create_todo_item(item: TodoItemIn_Pydantic):
+    todo = await TodoItem.create(**item.dict())
+    return await TodoItem_Pydantic.from_tortoise_orm(todo)
 
-@app_short.post("/shorten", response_model=ShortURL_Pydantic)
-async def shorten_url(request: URLRequest):
-    try:
-        short_id = generate_short_id()
-        print(f"Generated short_id: {short_id} for URL: {request.url}")
-        short_url = await ShortURL.create(short_id=short_id, original_url=str(request.url))
-        print(f"Shortened URL created: {short_url.short_id} -> {short_url.original_url}")
-        return await ShortURL_Pydantic.from_tortoise_orm(short_url)
-    except Exception as e:
-        print(f"Error during URL shortening: {e}")
-        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+@app_todo.get("/items", response_model=List[TodoItem_Pydantic])
+async def get_todo_items():
+    return await TodoItem_Pydantic.from_queryset(TodoItem.all())
 
-# API to redirect to the original URL
-@app_short.get("/{short_id}")
-async def redirect_to_url(short_id: str):
-    short_url = await ShortURL.get_or_none(short_id=short_id)
-    if not short_url:
-        raise HTTPException(status_code=404, detail="Short URL not found")
-    print(f"Redirecting short_id: {short_id} to URL: {short_url.original_url}")
-    return {"original_url": short_url.original_url}
+@app_todo.get("/items/{item_id}", response_model=TodoItem_Pydantic)
+async def get_todo_item(item_id: int):
+    todo = await TodoItem.get_or_none(id=item_id)
+    if not todo:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return await TodoItem_Pydantic.from_tortoise_orm(todo)
+
+@app_todo.put("/items/{item_id}", response_model=TodoItem_Pydantic)
+async def update_todo_item(item_id: int, item: TodoItemIn_Pydantic):
+    todo = await TodoItem.get_or_none(id=item_id)
+    if not todo:
+        raise HTTPException(status_code=404, detail="Item not found")
+    await todo.update_from_dict(item.dict()).save()
+    return await TodoItem_Pydantic.from_tortoise_orm(todo)
+
+@app_todo.delete("/items/{item_id}", response_model=dict)
+async def delete_todo_item(item_id: int):
+    todo = await TodoItem.get_or_none(id=item_id)
+    if not todo:
+        raise HTTPException(status_code=404, detail="Item not found")
+    await todo.delete()
+    return {"message": "Task deleted successfully"}
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app_short, host="0.0.0.0", port=8000)
+    uvicorn.run(app_todo, host="0.0.0.0", port=8000)

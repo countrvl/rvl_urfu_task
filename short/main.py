@@ -52,6 +52,10 @@ def generate_short_id(length=8):
 class URLRequest(BaseModel):
     url: str
 
+@app_short.get("/teapot", status_code=418) # :)
+async def teapot():
+    return {"detail": "I'm a teapot"}
+
 @app_short.post("/shorten", response_model=ShortURL_Pydantic)
 async def shorten_url(request: URLRequest):
     try:
