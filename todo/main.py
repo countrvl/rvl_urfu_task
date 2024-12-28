@@ -17,7 +17,9 @@ app_todo = FastAPI()
 async def lifespan(app: FastAPI):
     try:
         print(f"Initializing database with URL: {TODO_DB_URL}")
-        await Tortoise.init(db_url=TODO_DB_URL, modules={"models": ["__main__"]})
+
+        await Tortoise.init(db_url=TODO_DB_URL, modules={"models": ["main"]})
+
         await Tortoise.generate_schemas()
         print(f"Connected to database: {TODO_DB_URL}")
         yield
@@ -26,6 +28,7 @@ async def lifespan(app: FastAPI):
         raise
     finally:
         await Tortoise.close_connections()
+
 
 app_todo = FastAPI(lifespan=lifespan)
 

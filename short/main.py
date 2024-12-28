@@ -22,13 +22,10 @@ app_short = FastAPI()
 async def lifespan(app: FastAPI):
     try:
         print(f"Initializing database with URL: {DB_URL}")
-        await Tortoise.init(db_url=DB_URL, modules={"models": ["main", "__main__"]})
+        await Tortoise.init(db_url=DB_URL, modules={"models": ["__main__"]})
         await Tortoise.generate_schemas()
-        print(f"Connected to database: {DB_URL}")
+        print("Database initialized successfully.")
         yield
-    except Exception as e:
-        print(f"Error during lifespan startup: {e}")
-        raise
     finally:
         await Tortoise.close_connections()
 
@@ -67,6 +64,7 @@ async def shorten_url(request: URLRequest):
     except Exception as e:
         print(f"Error during URL shortening: {e}")
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+
 
 # API to redirect to the original URL
 @app_short.get("/{short_id}")
