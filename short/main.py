@@ -22,12 +22,17 @@ app_short = FastAPI()
 async def lifespan(app: FastAPI):
     try:
         print(f"Initializing database with URL: {DB_URL}")
-        await Tortoise.init(db_url=DB_URL, modules={"models": ["__main__"]})
+        # await Tortoise.init(db_url=DB_URL, modules={"models": ["__main__"]})
+        await Tortoise.init(db_url=DB_URL, modules={"models": ["main"]})
+
         await Tortoise.generate_schemas()
         print("Database initialized successfully.")
         yield
+    except Exception as e:
+        print(f"Error during lifespan startup: {e}")
     finally:
         await Tortoise.close_connections()
+
 
 app_short = FastAPI(lifespan=lifespan)
 
